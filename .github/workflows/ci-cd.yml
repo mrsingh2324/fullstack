@@ -30,43 +30,35 @@ jobs:
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
       - name: Configure Docker
-        run: gcloud auth configure-docker
+        run: gcloud auth configure-docker --quiet
 
       - name: Build and Push Auth
         uses: docker/build-push-action@v5
         with:
           context: ./services/auth
           push: true
-          tags: |
-            ${{ secrets.DOCKER_HUB_USERNAME }}/mern-auth:${{ github.sha }}
-            gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-auth:${{ github.sha }}
+          tags: gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-auth:${{ github.sha }}
 
       - name: Build and Push Books
         uses: docker/build-push-action@v5
         with:
           context: ./services/books
           push: true
-          tags: |
-            ${{ secrets.DOCKER_HUB_USERNAME }}/mern-books:${{ github.sha }}
-            gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-books:${{ github.sha }}
+          tags: gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-books:${{ github.sha }}
 
       - name: Build and Push Gateway
         uses: docker/build-push-action@v5
         with:
           context: ./services/api-gateway
           push: true
-          tags: |
-            ${{ secrets.DOCKER_HUB_USERNAME }}/mern-gateway:${{ github.sha }}
-            gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-gateway:${{ github.sha }}
+          tags: gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-gateway:${{ github.sha }}
 
       - name: Build and Push Frontend
         uses: docker/build-push-action@v5
         with:
           context: ./frontend
           push: true
-          tags: |
-            ${{ secrets.DOCKER_HUB_USERNAME }}/mern-frontend:${{ github.sha }}
-            gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-frontend:${{ github.sha }}
+          tags: gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-frontend:${{ github.sha }}
 
   deploy-gcp:
     needs: build-push
@@ -76,7 +68,8 @@ jobs:
       id-token: 'write'
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
@@ -85,52 +78,43 @@ jobs:
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
       - name: Deploy Auth to Cloud Run
-        uses: google-github-actions/deploy-cloudrun@v2
-        with:
-          service: mern-auth
-          image: gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-auth:${{ github.sha }}
-          region: ${{ secrets.GCP_REGION }}
-          allow-unauthenticated: true
+        run: |
+          gcloud run deploy mern-auth \
+            --image gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-auth:${{ github.sha }} \
+            --platform managed \
+            --region ${{ secrets.GCP_REGION }} \
+            --allow-unauthenticated \
+            --quiet
 
       - name: Deploy Books to Cloud Run
-        uses: google-github-actions/deploy-cloudrun@v2
-        with:
-          service: mern-books
-          image: gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-books:${{ github.sha }}
-          region: ${{ secrets.GCP_REGION }}
-          allow-unauthenticated: true
-          env_vars: MONGO_URI=${{ secrets.MONGO_URI }}
-
-      - name: Get Service URLs
         run: |
-          AUTH_URL=$(gcloud run services describe mern-auth --platform managed --region ${{ secrets.GCP_REGION }} --format 'value(status.url)')
-          BOOKS_URL=$(gcloud run services describe mern-books --platform managed --region ${{ secrets.GCP_REGION }} --format 'value(status.url)')
-          echo "AUTH_URL=$AUTH_URL"
-          echo "BOOKS_URL=$BOOKS_URL"
+          gcloud run deploy mern-books \
+            --image gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-books:${{ github.sha }} \
+            --platform managed \
+            --region ${{ secrets.GCP_REGION }} \
+            --allow-unauthenticated \
+            --quiet
 
       - name: Deploy Gateway to Cloud Run
-        uses: google-github-actions/deploy-cloudrun@v2
-        with:
-          service: mern-gateway
-          image: gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-gateway:${{ github.sha }}
-          region: ${{ secrets.GCP_REGION }}
-          allow-unauthenticated: true
-          env_vars: |
-            AUTH_URL=https://mern-auth-${{ secrets.GCP_REGION }}.run.app
-            BOOKS_URL=https://mern-books-${{ secrets.GCP_REGION }}.run.app
+        run: |
+          gcloud run deploy mern-gateway \
+            --image gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-gateway:${{ github.sha }} \
+            --platform managed \
+            --region ${{ secrets.GCP_REGION }} \
+            --allow-unauthenticated \
+            --quiet
 
       - name: Deploy Frontend to Cloud Run
-        uses: google-github-actions/deploy-cloudrun@v2
-        with:
-          service: mern-frontend
-          image: gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-frontend:${{ github.sha }}
-          region: ${{ secrets.GCP_REGION }}
-          allow-unauthenticated: true
+        run: |
+          gcloud run deploy mern-frontend \
+            --image gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-frontend:${{ github.sha }} \
+            --platform managed \
+            --region ${{ secrets.GCP_REGION }} \
+            --allow-unauthenticated \
+            --quiet
 
-      - name: Get Final URLs
+      - name: Output URLs
         run: |
           echo "=== Deployment Complete ==="
           echo "Frontend: $(gcloud run services describe mern-frontend --platform managed --region ${{ secrets.GCP_REGION }} --format 'value(status.url)')"
           echo "Gateway: $(gcloud run services describe mern-gateway --platform managed --region ${{ secrets.GCP_REGION }} --format 'value(status.url)')"
-          echo "Auth: $(gcloud run services describe mern-auth --platform managed --region ${{ secrets.GCP_REGION }} --format 'value(status.url)')"
-          echo "Books: $(gcloud run services describe mern-books --platform managed --region ${{ secrets.GCP_REGION }} --format 'value(status.url)')"
