@@ -1,4 +1,4 @@
-name: CI (Build & Push Only)
+name: CI (Build & Push to Docker Hub)
 
 on:
   push:
@@ -7,9 +7,6 @@ on:
 jobs:
   build-push:
     runs-on: ubuntu-latest
-    permissions:
-      contents: 'read'
-      id-token: 'write'
 
     steps:
       - uses: actions/checkout@v4
@@ -23,42 +20,33 @@ jobs:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-
-      - name: Configure Docker
-        run: gcloud auth configure-docker --quiet
-
       - name: Build and Push Auth
         uses: docker/build-push-action@v5
         with:
           context: ./services/auth
           push: true
-          tags: gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-auth:${{ github.sha }}
+          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/mern-auth:${{ github.sha }}
 
       - name: Build and Push Books
         uses: docker/build-push-action@v5
         with:
           context: ./services/books
           push: true
-          tags: gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-books:${{ github.sha }}
+          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/mern-books:${{ github.sha }}
 
       - name: Build and Push Gateway
         uses: docker/build-push-action@v5
         with:
           context: ./services/api-gateway
           push: true
-          tags: gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-gateway:${{ github.sha }}
+          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/mern-gateway:${{ github.sha }}
 
       - name: Build and Push Frontend
         uses: docker/build-push-action@v5
         with:
           context: ./frontend
           push: true
-          tags: gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-frontend:${{ github.sha }}
+          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/mern-frontend:${{ github.sha }}
 
       - name: Output Image Tag
-        run: echo "Images pushed with tag: ${{ github.sha }}"
+        run: echo "Images pushed. Tag: ${{ github.sha }}"
