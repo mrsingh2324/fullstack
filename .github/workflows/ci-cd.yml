@@ -1,0 +1,91 @@
+name: CI-CD
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Build and Push Auth
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/auth
+          push: true
+          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/mern-auth:${{ github.sha }}
+
+      - name: Build and Push Books
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/books
+          push: true
+          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/mern-books:${{ github.sha }}
+
+      - name: Build and Push Gateway
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/api-gateway
+          push: true
+          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/mern-gateway:${{ github.sha }}
+
+      - name: Build and Push Frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: true
+          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/mern-frontend:${{ github.sha }}
+
+  deploy-gcp:
+    needs: build-push
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Setup Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker
+        run: gcloud auth configure-docker
+
+      - name: Pull Images
+        run: |
+          docker pull ${{ secrets.DOCKER_HUB_USERNAME }}/mern-auth:${{ github.sha }}
+          docker pull ${{ secrets.DOCKER_HUB_USERNAME }}/mern-books:${{ github.sha }}
+          docker pull ${{ secrets.DOCKER_HUB_USERNAME }}/mern-gateway:${{ github.sha }}
+          docker pull ${{ secrets.DOCKER_HUB_USERNAME }}/mern-frontend:${{ github.sha }}
+
+      - name: Tag for GCR
+        run: |
+          docker tag ${{ secrets.DOCKER_HUB_USERNAME }}/mern-auth:${{ github.sha }} gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-auth:${{ github.sha }}
+          docker tag ${{ secrets.DOCKER_HUB_USERNAME }}/mern-books:${{ github.sha }} gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-books:${{ github.sha }}
+          docker tag ${{ secrets.DOCKER_HUB_USERNAME }}/mern-gateway:${{ github.sha }} gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-gateway:${{ github.sha }}
+          docker tag ${{ secrets.DOCKER_HUB_USERNAME }}/mern-frontend:${{ github.sha }} gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-frontend:${{ github.sha }}
+
+      - name: Push to GCR
+        run: |
+          docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-auth:${{ github.sha }}
+          docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-books:${{ github.sha }}
+          docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-gateway:${{ github.sha }}
+          docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-frontend:${{ github.sha }}
