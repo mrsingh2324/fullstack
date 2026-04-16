@@ -7,6 +7,10 @@ on:
 jobs:
   build-push:
     runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
     steps:
       - uses: actions/checkout@v4
 
@@ -19,40 +23,57 @@ jobs:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Configure Docker
+        run: gcloud auth configure-docker
+
       - name: Build and Push Auth
         uses: docker/build-push-action@v5
         with:
           context: ./services/auth
           push: true
-          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/mern-auth:${{ github.sha }}
+          tags: |
+            ${{ secrets.DOCKER_HUB_USERNAME }}/mern-auth:${{ github.sha }}
+            gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-auth:${{ github.sha }}
 
       - name: Build and Push Books
         uses: docker/build-push-action@v5
         with:
           context: ./services/books
           push: true
-          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/mern-books:${{ github.sha }}
+          tags: |
+            ${{ secrets.DOCKER_HUB_USERNAME }}/mern-books:${{ github.sha }}
+            gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-books:${{ github.sha }}
 
       - name: Build and Push Gateway
         uses: docker/build-push-action@v5
         with:
           context: ./services/api-gateway
           push: true
-          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/mern-gateway:${{ github.sha }}
+          tags: |
+            ${{ secrets.DOCKER_HUB_USERNAME }}/mern-gateway:${{ github.sha }}
+            gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-gateway:${{ github.sha }}
 
       - name: Build and Push Frontend
         uses: docker/build-push-action@v5
         with:
           context: ./frontend
           push: true
-          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/mern-frontend:${{ github.sha }}
+          tags: |
+            ${{ secrets.DOCKER_HUB_USERNAME }}/mern-frontend:${{ github.sha }}
+            gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-frontend:${{ github.sha }}
 
   deploy-gcp:
     needs: build-push
     runs-on: ubuntu-latest
     permissions:
-      id-token: write
-      contents: read
+      contents: 'read'
+      id-token: 'write'
 
     steps:
       - uses: actions/checkout@v4
@@ -63,29 +84,23 @@ jobs:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
-      - name: Setup Google Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.6.0"
 
-      - name: Configure Docker
-        run: gcloud auth configure-docker
+      - name: Terraform Init
+        working-directory: ./terraform
+        run: terraform init
 
-      - name: Pull Images
+      - name: Terraform Apply
+        working-directory: ./terraform
         run: |
-          docker pull ${{ secrets.DOCKER_HUB_USERNAME }}/mern-auth:${{ github.sha }}
-          docker pull ${{ secrets.DOCKER_HUB_USERNAME }}/mern-books:${{ github.sha }}
-          docker pull ${{ secrets.DOCKER_HUB_USERNAME }}/mern-gateway:${{ github.sha }}
-          docker pull ${{ secrets.DOCKER_HUB_USERNAME }}/mern-frontend:${{ github.sha }}
+          terraform apply -auto-approve \
+            -var "project_id=${{ secrets.GCP_PROJECT_ID }}" \
+            -var "region=us-central1" \
+            -var "image_tag=${{ github.sha }}"
 
-      - name: Tag for GCR
-        run: |
-          docker tag ${{ secrets.DOCKER_HUB_USERNAME }}/mern-auth:${{ github.sha }} gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-auth:${{ github.sha }}
-          docker tag ${{ secrets.DOCKER_HUB_USERNAME }}/mern-books:${{ github.sha }} gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-books:${{ github.sha }}
-          docker tag ${{ secrets.DOCKER_HUB_USERNAME }}/mern-gateway:${{ github.sha }} gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-gateway:${{ github.sha }}
-          docker tag ${{ secrets.DOCKER_HUB_USERNAME }}/mern-frontend:${{ github.sha }} gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-frontend:${{ github.sha }}
-
-      - name: Push to GCR
-        run: |
-          docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-auth:${{ github.sha }}
-          docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-books:${{ github.sha }}
-          docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-gateway:${{ github.sha }}
-          docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-frontend:${{ github.sha }}
+      - name: Get Load Balancer IP
+        working-directory: ./terraform
+        run: terraform output load_balancer_ip
