@@ -4,7 +4,7 @@ set -e
 echo "=== MERN Stack Cloud Run Deployment ==="
 
 if [ -z "$1" ]; then
-    echo "Usage: ./deploy.sh <image-tag> [mongo-uri]"
+    echo "Usage: ./deploy.sh <commit-sha> [mongo-uri]"
     echo "Example: ./deploy.sh abc1234 mongodb+srv://user:pass@cluster.mongodb.net/db"
     exit 1
 fi
@@ -25,8 +25,7 @@ gcloud run deploy mern-auth \
     --image docker.io/$DOCKER_HUB_USER/mern-auth:$IMAGE_TAG \
     --platform managed \
     --region $REGION \
-    --allow-unauthenticated \
-    --quiet
+    --allow-unauthenticated
 
 echo ""
 echo "=== Deploying Books Service ==="
@@ -34,9 +33,15 @@ gcloud run deploy mern-books \
     --image docker.io/$DOCKER_HUB_USER/mern-books:$IMAGE_TAG \
     --platform managed \
     --region $REGION \
-    --allow-unauthenticated \
-    $([ -n "$MONGO_URI" ] && echo "--set-env-vars MONGO_URI=$MONGO_URI") \
-    --quiet
+    --allow-unauthenticated
+if [ -n "$MONGO_URI" ]; then
+    gcloud run deploy mern-books \
+        --image docker.io/$DOCKER_HUB_USER/mern-books:$IMAGE_TAG \
+        --platform managed \
+        --region $REGION \
+        --allow-unauthenticated \
+        --update-env-vars MONGO_URI="$MONGO_URI"
+fi
 
 echo ""
 echo "=== Deploying Gateway Service ==="
@@ -45,8 +50,7 @@ gcloud run deploy mern-gateway \
     --platform managed \
     --region $REGION \
     --allow-unauthenticated \
-    --set-env-vars AUTH_URL=https://mern-auth-$REGION.run.app,BOOKS_URL=https://mern-books-$REGION.run.app \
-    --quiet
+    --update-env-vars AUTH_URL=https://mern-auth-$REGION.run.app,BOOKS_URL=https://mern-books-$REGION.run.app
 
 echo ""
 echo "=== Deploying Frontend Service ==="
@@ -54,8 +58,7 @@ gcloud run deploy mern-frontend \
     --image docker.io/$DOCKER_HUB_USER/mern-frontend:$IMAGE_TAG \
     --platform managed \
     --region $REGION \
-    --allow-unauthenticated \
-    --quiet
+    --allow-unauthenticated
 
 echo ""
 echo "=== Deployment Complete ==="
