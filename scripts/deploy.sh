@@ -15,13 +15,24 @@ DOCKER_HUB_USER="satyam2324"
 
 echo "Docker Hub: $DOCKER_HUB_USER"
 echo "Image Tag: $IMAGE_TAG"
-echo "Project: $PROJECT_ID"
-echo "Region: $REGION"
+
+# Save current docker config
+cp ~/.docker/config.json ~/.docker/config.json.bak 2>/dev/null || true
+
+# Remove all GCR helpers - keep only docker.io
+cat > ~/.docker/config.json << 'CONFIG'
+{
+	"auths": {},
+	"credHelpers": {
+		"docker.io": "desktop-helper"
+	}
+}
+CONFIG
 
 echo ""
 echo "=== Deploying Auth Service ==="
 gcloud run deploy mern-auth \
-    --image docker.io/$DOCKER_HUB_USER/mern-auth:$IMAGE_TAG \
+    --image index.docker.io/$DOCKER_HUB_USER/mern-auth:$IMAGE_TAG \
     --platform managed \
     --region $REGION \
     --allow-unauthenticated
@@ -29,7 +40,7 @@ gcloud run deploy mern-auth \
 echo ""
 echo "=== Deploying Books Service ==="
 gcloud run deploy mern-books \
-    --image docker.io/$DOCKER_HUB_USER/mern-books:$IMAGE_TAG \
+    --image index.docker.io/$DOCKER_HUB_USER/mern-books:$IMAGE_TAG \
     --platform managed \
     --region $REGION \
     --allow-unauthenticated
@@ -37,7 +48,7 @@ gcloud run deploy mern-books \
 echo ""
 echo "=== Deploying Gateway Service ==="
 gcloud run deploy mern-gateway \
-    --image docker.io/$DOCKER_HUB_USER/mern-gateway:$IMAGE_TAG \
+    --image index.docker.io/$DOCKER_HUB_USER/mern-gateway:$IMAGE_TAG \
     --platform managed \
     --region $REGION \
     --allow-unauthenticated \
@@ -46,7 +57,7 @@ gcloud run deploy mern-gateway \
 echo ""
 echo "=== Deploying Frontend Service ==="
 gcloud run deploy mern-frontend \
-    --image docker.io/$DOCKER_HUB_USER/mern-frontend:$IMAGE_TAG \
+    --image index.docker.io/$DOCKER_HUB_USER/mern-frontend:$IMAGE_TAG \
     --platform managed \
     --region $REGION \
     --allow-unauthenticated
@@ -57,3 +68,6 @@ echo "Frontend: $(gcloud run services describe mern-frontend --platform managed 
 echo "Gateway:  $(gcloud run services describe mern-gateway --platform managed --region $REGION --format 'value(status.url)')"
 echo "Auth:     $(gcloud run services describe mern-auth --platform managed --region $REGION --format 'value(status.url)')"
 echo "Books:    $(gcloud run services describe mern-books --platform managed --region $REGION --format 'value(status.url)')"
+
+# Restore docker config
+mv ~/.docker/config.json.bak ~/.docker/config.json 2>/dev/null || true
