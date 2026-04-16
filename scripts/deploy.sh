@@ -13,6 +13,7 @@ IMAGE_TAG="$1"
 MONGO_URI="${2:-}"
 PROJECT_ID="${GCP_PROJECT_ID:-deployment-488406}"
 REGION="${GCP_REGION:-us-central1}"
+DOCKER_HUB_USER="${DOCKER_HUB_USERNAME:-satyam2324}"
 
 echo "Image tag: $IMAGE_TAG"
 echo "Project ID: $PROJECT_ID"
@@ -21,7 +22,7 @@ echo "Region: $REGION"
 echo ""
 echo "=== Deploying Auth Service ==="
 gcloud run deploy mern-auth \
-    --image gcr.io/$PROJECT_ID/mern-auth:$IMAGE_TAG \
+    --image docker.io/$DOCKER_HUB_USER/mern-auth:$IMAGE_TAG \
     --platform managed \
     --region $REGION \
     --allow-unauthenticated \
@@ -30,7 +31,7 @@ gcloud run deploy mern-auth \
 echo ""
 echo "=== Deploying Books Service ==="
 gcloud run deploy mern-books \
-    --image gcr.io/$PROJECT_ID/mern-books:$IMAGE_TAG \
+    --image docker.io/$DOCKER_HUB_USER/mern-books:$IMAGE_TAG \
     --platform managed \
     --region $REGION \
     --allow-unauthenticated \
@@ -40,7 +41,7 @@ gcloud run deploy mern-books \
 echo ""
 echo "=== Deploying Gateway Service ==="
 gcloud run deploy mern-gateway \
-    --image gcr.io/$PROJECT_ID/mern-gateway:$IMAGE_TAG \
+    --image docker.io/$DOCKER_HUB_USER/mern-gateway:$IMAGE_TAG \
     --platform managed \
     --region $REGION \
     --allow-unauthenticated \
@@ -50,7 +51,7 @@ gcloud run deploy mern-gateway \
 echo ""
 echo "=== Deploying Frontend Service ==="
 gcloud run deploy mern-frontend \
-    --image gcr.io/$PROJECT_ID/mern-frontend:$IMAGE_TAG \
+    --image docker.io/$DOCKER_HUB_USER/mern-frontend:$IMAGE_TAG \
     --platform managed \
     --region $REGION \
     --allow-unauthenticated \
