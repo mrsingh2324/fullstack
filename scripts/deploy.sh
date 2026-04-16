@@ -5,7 +5,7 @@ echo "=== MERN Stack Cloud Run Deployment ==="
 
 if [ -z "$1" ]; then
     echo "Usage: ./deploy.sh <commit-sha> [mongo-uri]"
-    echo "Example: ./deploy.sh abc1234 mongodb+srv://user:pass@cluster.mongodb.net/db"
+    echo "Example: ./deploy.sh abc1234"
     exit 1
 fi
 
@@ -20,31 +20,9 @@ echo "Project ID: $PROJECT_ID"
 echo "Region: $REGION"
 
 echo ""
-echo "=== Pulling images from Docker Hub ==="
-docker pull $DOCKER_HUB_USER/mern-auth:$IMAGE_TAG
-docker pull $DOCKER_HUB_USER/mern-books:$IMAGE_TAG
-docker pull $DOCKER_HUB_USER/mern-gateway:$IMAGE_TAG
-docker pull $DOCKER_HUB_USER/mern-frontend:$IMAGE_TAG
-
-echo ""
-echo "=== Tagging for GCR ==="
-docker tag $DOCKER_HUB_USER/mern-auth:$IMAGE_TAG gcr.io/$PROJECT_ID/mern-auth:$IMAGE_TAG
-docker tag $DOCKER_HUB_USER/mern-books:$IMAGE_TAG gcr.io/$PROJECT_ID/mern-books:$IMAGE_TAG
-docker tag $DOCKER_HUB_USER/mern-gateway:$IMAGE_TAG gcr.io/$PROJECT_ID/mern-gateway:$IMAGE_TAG
-docker tag $DOCKER_HUB_USER/mern-frontend:$IMAGE_TAG gcr.io/$PROJECT_ID/mern-frontend:$IMAGE_TAG
-
-echo ""
-echo "=== Pushing to GCR ==="
-gcloud auth configure-docker
-docker push gcr.io/$PROJECT_ID/mern-auth:$IMAGE_TAG
-docker push gcr.io/$PROJECT_ID/mern-books:$IMAGE_TAG
-docker push gcr.io/$PROJECT_ID/mern-gateway:$IMAGE_TAG
-docker push gcr.io/$PROJECT_ID/mern-frontend:$IMAGE_TAG
-
-echo ""
 echo "=== Deploying Auth Service ==="
 gcloud run deploy mern-auth \
-    --image gcr.io/$PROJECT_ID/mern-auth:$IMAGE_TAG \
+    --image docker.io/$DOCKER_HUB_USER/mern-auth:$IMAGE_TAG \
     --platform managed \
     --region $REGION \
     --allow-unauthenticated
@@ -52,7 +30,7 @@ gcloud run deploy mern-auth \
 echo ""
 echo "=== Deploying Books Service ==="
 gcloud run deploy mern-books \
-    --image gcr.io/$PROJECT_ID/mern-books:$IMAGE_TAG \
+    --image docker.io/$DOCKER_HUB_USER/mern-books:$IMAGE_TAG \
     --platform managed \
     --region $REGION \
     --allow-unauthenticated
@@ -60,7 +38,7 @@ gcloud run deploy mern-books \
 echo ""
 echo "=== Deploying Gateway Service ==="
 gcloud run deploy mern-gateway \
-    --image gcr.io/$PROJECT_ID/mern-gateway:$IMAGE_TAG \
+    --image docker.io/$DOCKER_HUB_USER/mern-gateway:$IMAGE_TAG \
     --platform managed \
     --region $REGION \
     --allow-unauthenticated \
@@ -69,7 +47,7 @@ gcloud run deploy mern-gateway \
 echo ""
 echo "=== Deploying Frontend Service ==="
 gcloud run deploy mern-frontend \
-    --image gcr.io/$PROJECT_ID/mern-frontend:$IMAGE_TAG \
+    --image docker.io/$DOCKER_HUB_USER/mern-frontend:$IMAGE_TAG \
     --platform managed \
     --region $REGION \
     --allow-unauthenticated
