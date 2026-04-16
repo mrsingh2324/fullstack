@@ -84,23 +84,53 @@ jobs:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      - name: Deploy Auth to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v2
         with:
-          terraform_version: "1.6.0"
+          service: mern-auth
+          image: gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-auth:${{ github.sha }}
+          region: ${{ secrets.GCP_REGION }}
+          allow-unauthenticated: true
 
-      - name: Terraform Init
-        working-directory: ./terraform
-        run: terraform init
+      - name: Deploy Books to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: mern-books
+          image: gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-books:${{ github.sha }}
+          region: ${{ secrets.GCP_REGION }}
+          allow-unauthenticated: true
+          env_vars: MONGO_URI=${{ secrets.MONGO_URI }}
 
-      - name: Terraform Apply
-        working-directory: ./terraform
+      - name: Get Service URLs
         run: |
-          terraform apply -auto-approve \
-            -var "project_id=${{ secrets.GCP_PROJECT_ID }}" \
-            -var "region=us-central1" \
-            -var "image_tag=${{ github.sha }}"
+          AUTH_URL=$(gcloud run services describe mern-auth --platform managed --region ${{ secrets.GCP_REGION }} --format 'value(status.url)')
+          BOOKS_URL=$(gcloud run services describe mern-books --platform managed --region ${{ secrets.GCP_REGION }} --format 'value(status.url)')
+          echo "AUTH_URL=$AUTH_URL"
+          echo "BOOKS_URL=$BOOKS_URL"
 
-      - name: Get Load Balancer IP
-        working-directory: ./terraform
-        run: terraform output load_balancer_ip
+      - name: Deploy Gateway to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: mern-gateway
+          image: gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-gateway:${{ github.sha }}
+          region: ${{ secrets.GCP_REGION }}
+          allow-unauthenticated: true
+          env_vars: |
+            AUTH_URL=https://mern-auth-${{ secrets.GCP_REGION }}.run.app
+            BOOKS_URL=https://mern-books-${{ secrets.GCP_REGION }}.run.app
+
+      - name: Deploy Frontend to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: mern-frontend
+          image: gcr.io/${{ secrets.GCP_PROJECT_ID }}/mern-frontend:${{ github.sha }}
+          region: ${{ secrets.GCP_REGION }}
+          allow-unauthenticated: true
+
+      - name: Get Final URLs
+        run: |
+          echo "=== Deployment Complete ==="
+          echo "Frontend: $(gcloud run services describe mern-frontend --platform managed --region ${{ secrets.GCP_REGION }} --format 'value(status.url)')"
+          echo "Gateway: $(gcloud run services describe mern-gateway --platform managed --region ${{ secrets.GCP_REGION }} --format 'value(status.url)')"
+          echo "Auth: $(gcloud run services describe mern-auth --platform managed --region ${{ secrets.GCP_REGION }} --format 'value(status.url)')"
+          echo "Books: $(gcloud run services describe mern-books --platform managed --region ${{ secrets.GCP_REGION }} --format 'value(status.url)')"

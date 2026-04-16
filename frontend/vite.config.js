@@ -6,5 +6,8 @@ export default defineConfig({
   server: {
     port: 80,
     host: true
+  },
+  build: {
+    envPrefix: ['VITE_', 'REACT_']
   }
 })
